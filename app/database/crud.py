@@ -1,14 +1,16 @@
+import datetime
 import uuid
 from decimal import Decimal
-import datetime
 from fastapi import HTTPException
+from loguru import logger
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from loguru import logger
+
 from .models import Wallet, Operation
 from ..schemas.operation import OperationRequest, OperationType
 from ..schemas.wallet import WalletBalanceResponse
+
 
 async def get_wallet_by_uuid(wallet_uuid: uuid.UUID, db: AsyncSession, for_update: bool = False) -> Wallet:
     """
@@ -31,7 +33,7 @@ async def get_wallet_by_uuid(wallet_uuid: uuid.UUID, db: AsyncSession, for_updat
         stmt = select(Wallet).filter(Wallet.wallet_uuid == str(wallet_uuid))
 
         if for_update:
-            stmt = stmt.with_for_update()  # 🔒 Блокировка строки для избежания гонки
+            stmt = stmt.with_for_update()
 
         result = await db.execute(stmt)
         wallet = result.scalar_one_or_none()
@@ -86,7 +88,7 @@ async def create_wallet_operation(wallet_uuid: uuid.UUID, operation: OperationRe
         return {
             "wallet_uuid": wallet_uuid,
             "operation_type": operation.operation_type,
-            "amount": str(operation.amount),  # Преобразуем обратно в строку, если нужно
+            "amount": operation.amount,
             "new_balance": str(wallet.balance)
         }
 
@@ -183,4 +185,42 @@ async def get_list_wallets(db: AsyncSession) -> list:
     except SQLAlchemyError as e:
         raise HTTPException(status_code=500, detail="Database error during wallet list retrieval")
     except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+
+async def delete_wallet_by_uuid(wallet_uuid: uuid.UUID, db: AsyncSession) -> dict:
+    """
+    Удаляет кошелек по UUID из базы данных.
+
+    Args:
+        wallet_uuid (uuid.UUID): UUID кошелька для удаления
+        db (AsyncSession): Асинхронная сессия SQLAlchemy для работы с базой данных
+
+    Returns:
+        dict: Информацию о завершении операции (например, сообщение об успешном удалении)
+
+    Exceptions:
+        HTTPException: В случае ошибки при удалении кошелька
+        SQLAlchemyError: В случае ошибки базы данных
+        Exception: В случае неожиданной ошибки
+    """
+    try:
+        # Ищем кошелек по UUID
+        logger.info(wallet_uuid)
+        wallet = await get_wallet_by_uuid(wallet_uuid, db)
+        logger.info(wallet)
+        if not wallet:
+            return {"message": "Wallet not found", "wallet_uuid": wallet_uuid}
+
+        await db.delete(wallet)
+        await db.commit()
+
+        return {"message": "Wallet successfully deleted", "wallet_uuid": wallet_uuid}
+
+    except SQLAlchemyError as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Database error during wallet deletion")
+
+    except Exception as e:
+        await db.rollback()
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")

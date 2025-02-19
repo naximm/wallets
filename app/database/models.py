@@ -51,7 +51,7 @@ class Wallet(Base):
     wallet_uuid = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     balance = Column(Numeric(precision=10, scale=2), nullable=False, default=0.00)
 
-    operations = relationship('Operation', back_populates='wallet')
+    operations = relationship('Operation', back_populates='wallet', cascade="all, delete-orphan")
 
 
 class Operation(Base):
@@ -71,9 +71,9 @@ class Operation(Base):
     __tablename__ = 'operations'
 
     operation_id = Column(Integer, primary_key=True, autoincrement=True)
-    wallet_uuid = Column(UUID(as_uuid=True), ForeignKey('wallets.wallet_uuid'), nullable=False)
+    wallet_uuid = Column(UUID(as_uuid=True), ForeignKey('wallets.wallet_uuid', ondelete='CASCADE'), nullable=False)
     operation_type = Column(SqlAlchemyEnum(OperationType), nullable=False)
-    amount = Column(Float, nullable=False)
+    amount = Column(Numeric(precision=10, scale=2), nullable=False)
     timestamp = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
 
-    wallet = relationship('Wallet', back_populates='operations')
+    wallet = relationship('Wallet', back_populates='operations', passive_deletes=True)

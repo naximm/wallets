@@ -1,16 +1,15 @@
 import uuid
-
 import uvicorn
-from fastapi import FastAPI, Depends, HTTPException, status
-from fastapi import Request
+from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from sqlalchemy.dialects.postgresql.psycopg import logger
+from loguru import logger
+from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import ValidationError
-from fastapi.exceptions import RequestValidationError
 
-from .database.crud import create_new_wallet, get_list_wallets, get_wallet_balance, create_wallet_operation
+from .database.crud import create_new_wallet, get_list_wallets, get_wallet_balance, \
+    create_wallet_operation, delete_wallet_by_uuid
 from .database.database import get_db, init_db
 from .schemas.operation import OperationRequest
 from .schemas.wallet import WalletListResponse
@@ -32,8 +31,6 @@ async def startup_event():
     app.state.db_initialized = True
 
 
-
-
 @app.post("/api/v1/wallets/{wallet_uuid}/operation")
 async def create_operation(wallet_uuid: uuid.UUID, operation: OperationRequest, db: AsyncSession = Depends(get_db)):
     """
@@ -45,14 +42,14 @@ async def create_operation(wallet_uuid: uuid.UUID, operation: OperationRequest, 
     try:
         operation = await create_wallet_operation(wallet_uuid, operation, db)
         if operation is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Кошелек не найден")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wallet not found")
         return operation
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except HTTPException as e:
         raise e
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Неизвестная ошибка {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unknown error {e}")
 
 
 @app.get("/api/v1/wallets/{wallet_uuid}")
@@ -65,14 +62,14 @@ async def get_balance(wallet_uuid: uuid.UUID, db: AsyncSession = Depends(get_db)
     try:
         balance = await get_wallet_balance(wallet_uuid, db)
         if balance is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Кошелек не найден")
-        return {"balance": balance}
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Wallet not found")
+        return balance
     except SQLAlchemyError:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Ошибка базы данных")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database error")
     except HTTPException as e:
         raise e
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Неизвестная ошибка")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unknown error: {str(e)}")
 
 
 @app.get("/api/v1/wallets/")
@@ -86,9 +83,9 @@ async def list_wallets(db: AsyncSession = Depends(get_db)):
         wallets = await get_list_wallets(db)
         return WalletListResponse(wallets=wallets)
     except SQLAlchemyError:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Ошибка базы данных")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database error")
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Неизвестная ошибка")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unknown error: {str(e)}")
 
 
 @app.post("/api/v1/wallets/")
@@ -101,9 +98,29 @@ async def create_wallet(db: AsyncSession = Depends(get_db)):
     try:
         return await create_new_wallet(db)
     except SQLAlchemyError:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Ошибка базы данных")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database error")
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Неизвестная ошибка")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unknown error: {str(e)}")
+
+
+@app.delete("/api/v1/wallets/{wallet_uuid}")
+async def delete_wallet(wallet_uuid: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """
+    Удаление кошелька.
+
+    Удаляет кошелек по UUID.
+    """
+    try:
+        logger.info(wallet_uuid)
+        result = await delete_wallet_by_uuid(wallet_uuid, db)
+        if "Wallet not found" in result["message"]:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result["message"])
+
+        return result
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unknown error: {str(e)}")
 
 
 @app.exception_handler(RequestValidationError)
@@ -112,6 +129,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         status_code=422,
         content={"detail": exc.errors()}
     )
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8001)
