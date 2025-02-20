@@ -111,7 +111,6 @@ async def delete_wallet(wallet_uuid: uuid.UUID, db: AsyncSession = Depends(get_d
     Удаляет кошелек по UUID.
     """
     try:
-        logger.info(wallet_uuid)
         result = await delete_wallet_by_uuid(wallet_uuid, db)
         if "Wallet not found" in result["message"]:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result["message"])

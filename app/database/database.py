@@ -57,12 +57,12 @@ async def init_db():
     try:
         async with ENGINE.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
-        logger.info("База данных успешно инициализирована")
+        logger.info("Database initialized successfully")
     except SQLAlchemyError as e:
-        logger.error(f"Ошибка базы данных: {str(e)}")
+        logger.error(f"Database error: {str(e)}")
         raise HTTPException(status_code=500, detail="Database error during initialization")
     except Exception as e:
-        logger.error(f"Неизвестная ошибка: {str(e)}")
+        logger.error(f"Unknown error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Unknown error: {str(e)}")
 
 

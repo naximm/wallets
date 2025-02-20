@@ -1,7 +1,6 @@
 import pytest
 import uuid
 from httpx import AsyncClient
-from loguru import logger
 
 BASE_URL = "http://localhost:8001"
 
@@ -16,7 +15,7 @@ async def test_create_wallet():
         assert "wallet_uuid" in response_json
         assert "balance" in response_json
         assert response_json["balance"] == 0.0
-        delete_response = await client.delete(f"/api/v1/wallets/{response_json["wallet_uuid"]}")
+        delete_response = await client.delete(f"/api/v1/wallets/{response_json['wallet_uuid']}")
         assert delete_response.status_code == 200
 
 
@@ -26,15 +25,13 @@ async def test_get_wallet_balance():
     async with AsyncClient(base_url=BASE_URL) as client:
         response = await client.post("/api/v1/wallets/")
         create_response_json = response.json()
-        # logger.info(create_response_json["wallet_uuid"])
-        balance_response = await client.get(f"/api/v1/wallets/{create_response_json["wallet_uuid"]}")
+        balance_response = await client.get(f"/api/v1/wallets/{create_response_json['wallet_uuid']}")
         balance_json = balance_response.json()
-        # logger.info(balance_json["balance"])
         assert balance_response.status_code == 200
         assert "balance" in balance_json
         assert balance_json["balance"] == 0.0
 
-        delete_response = await client.delete(f"/api/v1/wallets/{create_response_json["wallet_uuid"]}")
+        delete_response = await client.delete(f"/api/v1/wallets/{create_response_json['wallet_uuid']}")
         assert delete_response.status_code == 200
 
 
@@ -73,7 +70,6 @@ async def test_create_operation_deposit():
         assert operation_response.status_code == 200
         assert operation_json["amount"] == 100.0
         assert operation_json["operation_type"] == "DEPOSIT"
-        logger.info(wallet_uuid)
         delete_response = await client.delete(f"/api/v1/wallets/{wallet_uuid}")
         assert delete_response.status_code == 200
 
@@ -115,7 +111,6 @@ async def test_create_operation_withdrow():
         # assert operation_json["balance"] == 90.0
         assert operation_json["amount"] == 10.0
         assert operation_json["operation_type"] == "WITHDRAW"
-        logger.info(operation_json)
         delete_response = await client.delete(f"/api/v1/wallets/{wallet_uuid}")
         assert delete_response.status_code == 200
 
@@ -166,7 +161,7 @@ async def test_create_wallet_operation_invalid_wallet():
 
         response = await client.post(f"/api/v1/wallets/{invalid_wallet_uuid}/operation", json=operation_data)
         assert response.status_code == 404
-        assert response.json()["detail"] == "Кошелек не найден"
+        assert response.json()["detail"] == 'Wallet not found'
 
 
 @pytest.mark.asyncio
@@ -196,7 +191,7 @@ async def test_get_wallet_balance_invalid_wallet():
     async with AsyncClient(base_url=BASE_URL) as client:
         response = await client.get(f"/api/v1/wallets/{invalid_wallet_uuid}")
         assert response.status_code == 404
-        assert response.json()["detail"] == "Кошелек не найден"
+        assert response.json()["detail"] == 'Wallet not found'
 
 
 @pytest.mark.asyncio

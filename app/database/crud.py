@@ -206,9 +206,7 @@ async def delete_wallet_by_uuid(wallet_uuid: uuid.UUID, db: AsyncSession) -> dic
     """
     try:
         # Ищем кошелек по UUID
-        logger.info(wallet_uuid)
         wallet = await get_wallet_by_uuid(wallet_uuid, db)
-        logger.info(wallet)
         if not wallet:
             return {"message": "Wallet not found", "wallet_uuid": wallet_uuid}
 
