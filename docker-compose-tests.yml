@@ -2,7 +2,7 @@ services:
   wallet-tests:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile-tests
     ports:
       - "8002:8001"
     depends_on:
