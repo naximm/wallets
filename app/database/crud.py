@@ -1,8 +1,6 @@
 import datetime
 import uuid
-from decimal import Decimal
 from fastapi import HTTPException
-from loguru import logger
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -30,7 +28,7 @@ async def get_wallet_by_uuid(wallet_uuid: uuid.UUID, db: AsyncSession, for_updat
         Exception: В случае неожиданной ошибки
     """
     try:
-        stmt = select(Wallet).filter(Wallet.wallet_uuid == str(wallet_uuid))
+        stmt = select(Wallet).filter(Wallet.wallet_uuid == wallet_uuid)
 
         if for_update:
             stmt = stmt.with_for_update()
@@ -38,7 +36,8 @@ async def get_wallet_by_uuid(wallet_uuid: uuid.UUID, db: AsyncSession, for_updat
         result = await db.execute(stmt)
         wallet = result.scalar_one_or_none()
         return wallet
-    except SQLAlchemyError as e:
+
+    except SQLAlchemyError:
         raise HTTPException(status_code=500, detail="Database error during wallet retrieval")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
@@ -92,10 +91,10 @@ async def create_wallet_operation(wallet_uuid: uuid.UUID, operation: OperationRe
             "new_balance": str(wallet.balance)
         }
 
-    except SQLAlchemyError as e:
+    except SQLAlchemyError:
         await db.rollback()
         raise HTTPException(status_code=500, detail="Database error during wallet operation")
-    except ValueError as e:
+    except ValueError:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Invalid operation amount")
     except Exception as e:
@@ -155,7 +154,7 @@ async def create_new_wallet(db: AsyncSession) -> dict:
             "wallet_uuid": wallet.wallet_uuid,
             "balance": wallet.balance
         }
-    except SQLAlchemyError as e:
+    except SQLAlchemyError:
         await db.rollback()
         raise HTTPException(status_code=500, detail="Database error during wallet creation")
     except Exception as e:
@@ -182,7 +181,7 @@ async def get_list_wallets(db: AsyncSession) -> list:
         result = await db.execute(select(Wallet))
         wallets = result.scalars().all()
         return [WalletBalanceResponse(wallet_uuid=wallet.wallet_uuid, balance=wallet.balance) for wallet in wallets]
-    except SQLAlchemyError as e:
+    except SQLAlchemyError:
         raise HTTPException(status_code=500, detail="Database error during wallet list retrieval")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
@@ -215,10 +214,12 @@ async def delete_wallet_by_uuid(wallet_uuid: uuid.UUID, db: AsyncSession) -> dic
 
         return {"message": "Wallet successfully deleted", "wallet_uuid": wallet_uuid}
 
-    except SQLAlchemyError as e:
+    except SQLAlchemyError:
         await db.rollback()
         raise HTTPException(status_code=500, detail="Database error during wallet deletion")
 
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+
